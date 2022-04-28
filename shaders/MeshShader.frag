@@ -563,6 +563,7 @@ float sdRoundBox( vec3 p, vec4 data1, vec2 data2 )
 // vec4 w = opElongate( transformedPos, vec3(0.2,0.0,1.0) );\
 // transformedPos = w.xyz;\
 // float addend=w.w;\
+
 #define RAYMARCH_PRIM(pos, groupInx, primInx, res, sdFunc) \
 { \
     mat4 groupTransform = RenderGroups[groupInx].transform; \
@@ -638,32 +639,80 @@ Hit RayMarch( vec3 pos ){
         {
             int primInx = RenderGroups[i].primitives[j];
             Material primMat = Materials[Primitives[primInx].matID];
-            if(Primitives[primInx].Type == SPHERE_TYPE)             {                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdSphere); }
-            else if(Primitives[primInx].Type == BOX_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdBox);}
-            else if(Primitives[primInx].Type == ROUNDBOX_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdRoundBox);             }
-            else if(Primitives[primInx].Type == BOXFRAME_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdBoxFrame);}
-            else if(Primitives[primInx].Type == TORUS_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdTorus);}
-            else if(Primitives[primInx].Type == CAPPEDTORRUS_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdCappedTorus);}
-            else if(Primitives[primInx].Type == LINK_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdLink);}
-            else if(Primitives[primInx].Type == INFINITECYLINDER_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdCylinder);}
-            else if(Primitives[primInx].Type == CONE_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdCone);}
+            if(Primitives[primInx].Type == SPHERE_TYPE)             { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdSphere); 
+            }
+            else if(Primitives[primInx].Type == BOX_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdBox);
+            }
+            else if(Primitives[primInx].Type == ROUNDBOX_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdRoundBox);             
+            }
+            else if(Primitives[primInx].Type == BOXFRAME_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdBoxFrame);
+            }
+            else if(Primitives[primInx].Type == TORUS_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdTorus);
+            }
+            else if(Primitives[primInx].Type == CAPPEDTORRUS_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdCappedTorus);
+            }
+            else if(Primitives[primInx].Type == LINK_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdLink);
+            }
+            else if(Primitives[primInx].Type == INFINITECYLINDER_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdCylinder);
+            }
+            else if(Primitives[primInx].Type == CONE_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdCone);
+            }
+            else if(Primitives[primInx].Type == PLANE_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdPlane);
+            }
+            else if(Primitives[primInx].Type == HEXAPRISM_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdHexPrism);
+            }
+            else if(Primitives[primInx].Type == TRIPRISM_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdTriPrism);
+            }
+            else if(Primitives[primInx].Type == CAPPEDCYLINDER_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdCappedCylinder);
+            }
+            else if(Primitives[primInx].Type == ROUNDCYLINDER_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdRoundedCylinder);
+            }
+            else if(Primitives[primInx].Type == CAPPEDCONE_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdCappedCone);
+            }
+            else if(Primitives[primInx].Type == SOLIDANGLE_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdSolidAngle);
+            }
+            else if(Primitives[primInx].Type == CUTSPHERE_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdCutSphere);
+            }
+            else if(Primitives[primInx].Type == CUTHOLLOWSPHERE_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdCutHollowSphere);
+            }
+            else if(Primitives[primInx].Type == DEATHSTAR_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdDeathStar);
+            }
+            else if(Primitives[primInx].Type == ROUNDCONE_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdRoundCone);
+            }
+            else if(Primitives[primInx].Type == ELLIPSOID_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdEllipsoid);
+            }
+            else if(Primitives[primInx].Type == RHOMBUS_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdRhombus);
+            }
+            else if(Primitives[primInx].Type == OCTAHEDRON_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdOctahedron);
+            }
+            else if(Primitives[primInx].Type == PYRAMID_TYPE) { 
+                RAYMARCH_PRIM(pos, i, primInx,  res,  sdPyramid);
+            }
             // else if(Primitives[primInx].Type == INFINITECONE_TYPE) { // RAYMARCH_PRIM(pos, i, primInx,  res,  sdcone);}
-            else if(Primitives[primInx].Type == PLANE_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdPlane);}
-            else if(Primitives[primInx].Type == HEXAPRISM_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdHexPrism);}
-            else if(Primitives[primInx].Type == TRIPRISM_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdTriPrism);}
             // else if(Primitives[primInx].Type == CAPSULE_TYPE) { // RAYMARCH_PRIM(pos, i, primInx,  res,  sdCapsule);}
-            else if(Primitives[primInx].Type == CAPPEDCYLINDER_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdCappedCylinder);}
-            else if(Primitives[primInx].Type == ROUNDCYLINDER_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdRoundedCylinder);}
-            else if(Primitives[primInx].Type == CAPPEDCONE_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdCappedCone);}
-            else if(Primitives[primInx].Type == SOLIDANGLE_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdSolidAngle);}
-            else if(Primitives[primInx].Type == CUTSPHERE_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdCutSphere);}
-            else if(Primitives[primInx].Type == CUTHOLLOWSPHERE_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdCutHollowSphere);}
-            else if(Primitives[primInx].Type == DEATHSTAR_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdDeathStar);}
-            else if(Primitives[primInx].Type == ROUNDCONE_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdRoundCone);}
-            else if(Primitives[primInx].Type == ELLIPSOID_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdEllipsoid);}
-            else if(Primitives[primInx].Type == RHOMBUS_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdRhombus);}
-            else if(Primitives[primInx].Type == OCTAHEDRON_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdOctahedron);}
-            else if(Primitives[primInx].Type == PYRAMID_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdPyramid);}
             // else if(Primitives[primInx].Type == TRIANGLE_TYPE) { // RAYMARCH_PRIM(pos, i, primInx,  res,  udTriangle);                 }
             // else if(Primitives[primInx].Type == QUAD_TYPE) { // RAYMARCH_PRIM(pos, i, primInx,  res,  udQuad);                 }
         }
