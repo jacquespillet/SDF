@@ -22,20 +22,6 @@ enum RenderOpType
     SmoothIntersect = 5,
 };
 
-struct RenderGroup
-{
-    RenderOpType opType;
-    int numPrimitives;
-    glm::vec2 padding;
-    glm::mat4 inverseTransform;
-    int primitives[256];
-};
-
-struct Material
-{
-    glm::vec3 Color;
-    float shininess;
-};
 
 //Data :
 //Sphere: (Radius, X, X, X), (X, X)
@@ -79,10 +65,36 @@ enum PrimitiveType
 struct Primitive
 {
     glm::vec4 Data1;
-    glm::vec2 Data2;
+    glm::vec4 Data2;
+
+    glm::vec3 Ellongation;
+    float rounding;
+    
     int matID;
     PrimitiveType Type;
+    RenderOpType opType;
+    int symmetry;
+
+    glm::vec4 repetitionData;
+    glm::vec4 repetitionBounds;
+    
     glm::mat4 inverseTransform;
+};
+
+
+struct RenderGroup
+{
+    int padding0;
+    int numPrimitives;
+    glm::vec2 padding;
+    glm::mat4 inverseTransform;
+    int primitives[256];
+};
+
+struct Material
+{
+    glm::vec3 Color;
+    float shininess;
 };
 
 class Template : public Demo {
@@ -101,10 +113,24 @@ public :
     void Scroll(float offset);
 
 private:
+
     void AddPrimitiveToGroup(PrimitiveType primType, int group);
     void AddGroup();
     void AddPrimContextMenu(std::string groupLabel, int groupIndex);
+    void DeletePrimitiveFromGroup(int groupInx, int primInx);
+    void DuplicatePrimitive(int groupInx, int primInx);
     
+    //GPU upload
+    void UploadGroupData(int groupInx);
+    void UploadAllGroupData();
+    void UploadPrimData(int primInx);
+    void UploadPrimDataFrom(int primInx);
+    void UploadMatData(int matInx);
+    void UploadAllPrimData();
+    
+    
+
+    //ImGui
     void HandleTransforms();
     void HandlePrimitiveTransform(int primitiveIndex, int groupIndex);
     void HandleGroupTransform(int groupIndex);
@@ -134,15 +160,18 @@ private:
     bool normalTextureSet=false;
 
     std::vector<Primitive> primitives;
+    std::vector<std::string> primNames;   
+    
     std::vector<Material> materials;
+    std::vector<std::string> matNames;
 
     std::vector<RenderGroup> renderGroups;
+    std::vector<std::string> groupNames;
 
     GLuint primitivesBuffer;
     GLuint renderGroupsBuffer;
     GLuint materialsBuffer;
 
-    std::vector<std::string> matNames;
 
 
     //Scene tree
@@ -150,5 +179,7 @@ private:
     int selectedPrimitiveInGroup = -1;    
 
     ImGuizmo::OPERATION currentGizmoOperation = (ImGuizmo::TRANSLATE);
-    ImGuizmo::MODE currentGizmoMode = (ImGuizmo::WORLD);    
+    ImGuizmo::MODE currentGizmoMode = (ImGuizmo::WORLD); 
+
+    
 };

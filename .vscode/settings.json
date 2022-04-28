@@ -69,6 +69,7 @@
         "chrono": "cpp",
         "ratio": "cpp",
         "deque": "cpp",
-        "queue": "cpp"
+        "queue": "cpp",
+        "array": "cpp"
     }
 }

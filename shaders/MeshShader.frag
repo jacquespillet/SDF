@@ -71,17 +71,27 @@ struct Material
 struct Primitive
 {
     vec4 Data1;
-    vec2 Data2;
+    vec4 Data2;
+
+    vec3 elongation;
+    float rounding;    
+    
     int matID;
-    int Type;
+    int type;
+    int opType;
+    int symmetry;
+
+    vec4 repetitionData;    
+    vec4 repetitionBounds;    
+    
     mat4 transform;
 };
 
 struct RenderGroup
 {
-    int renderOpType;
+    int padding0;
     int numPrimitives;
-    vec2 padding;
+    vec2 padding1;
     mat4 transform;
     int primitives[256];
 };
@@ -108,7 +118,7 @@ float dot2( in vec2 v ) { return dot(v,v); }
 float dot2( in vec3 v ) { return dot(v,v); }
 float ndot( in vec2 a, in vec2 b ) { return a.x*b.x - a.y*b.y; }
 
-//Group operations
+//Render operations
 
 Hit opU( Hit d1, Hit d2 ){
 	return (d1.distance<d2.distance) ? d1 : d2;
@@ -123,19 +133,17 @@ vec2 opSmoothUnion( float a, float b, float k )
 }
 
 float opSubtract( float d1, float d2 ){
-    return max(d1,-d2);
+    return max(-d1,d2);
 }
 
 
 float opSmoothSubtraction( float d1, float d2, float k ) {
-    d1 *=-1;
-    d2 *=-1;
     float h = clamp( 0.5 - 0.5*(d2+d1)/k, 0.0, 1.0 );
     return mix( d2, -d1, h ) + k*h*(1.0-h);
 }
 
 float opIntersection( float d1, float d2 ) { 
-    return max(-d1,d2); 
+    return max(d1,d2);
 }
 
 float opSmoothIntersection( float d1, float d2, float k ) {
@@ -151,9 +159,41 @@ vec4 opElongate( in vec3 p, in vec3 h )
     return vec4( max(q,0.0), min(max(q.x,max(q.y,q.z)),0.0) );
 }
 
+float rounding( in float d, in float h )
+{
+    return d - h;
+}
+
+vec3 opSymX( in vec3 p)
+{
+    p.x = abs(p.x);
+    return p;
+}
+
+vec3 opSymXZ( in vec3 p)
+{
+    p.xz = abs(p.xz);
+    return p;
+}
+
+vec3 opRep( in vec3 p, in vec3 c)
+{
+    vec3 q = mod(p+0.5*c,c)-0.5*c;
+    return q;
+}
+
+
+vec3 opRepLim( in vec3 p, in float c, in vec3 l)
+{
+    vec3 q = p-c*clamp(round(p/c),-l,l);
+    return q;
+}
+
+
+
 
 //SDFs
-float sdBoxFrame( vec3 p, vec4 data1, vec2 data2 )
+float sdBoxFrame( vec3 p, vec4 data1, vec4 data2 )
 {
     vec3 b = data1.xyz;
     float e = data1.w;
@@ -165,14 +205,14 @@ float sdBoxFrame( vec3 p, vec4 data1, vec2 data2 )
         length(max(vec3(q.x,q.y,p.z),0.0))+min(max(q.x,max(q.y,p.z)),0.0));
 }
 
-float sdTorus( vec3 p,  vec4 data1, vec2 data2 )
+float sdTorus( vec3 p,  vec4 data1, vec4 data2 )
 {
     vec2 t = data1.xy;
     vec2 q = vec2(length(p.xz)-t.x,p.y);
     return length(q)-t.y;
 }
 
-float sdCappedTorus(in vec3 p,  vec4 data1, vec2 data2 )
+float sdCappedTorus(in vec3 p,  vec4 data1, vec4 data2 )
 {
     vec2 sc = data1.xy;
     float ra = data1.z;
@@ -183,7 +223,7 @@ float sdCappedTorus(in vec3 p,  vec4 data1, vec2 data2 )
 }
 
 
-float sdLink( vec3 p,  vec4 data1, vec2 data2 )
+float sdLink( vec3 p,  vec4 data1, vec4 data2 )
 {
     float le = data1.x;
     float r1 = data1.y;
@@ -193,14 +233,14 @@ float sdLink( vec3 p,  vec4 data1, vec2 data2 )
 }
 
 
-float sdCylinder( vec3 p, vec4 data1, vec2 data2 )
+float sdCylinder( vec3 p, vec4 data1, vec4 data2 )
 {
     vec3 c = data1.xyz;
     return length(p.xz-c.xy)-c.z;
 }
 
 
-float sdCone( vec3 p, vec4 data1, vec2 data2 )
+float sdCone( vec3 p, vec4 data1, vec4 data2 )
 {
     vec2 c = data1.xy;
     float h = data1.z;
@@ -217,7 +257,7 @@ float sdCone( vec3 p, vec4 data1, vec2 data2 )
 }
 
 
-float sdPlane( vec3 p, vec4 data1, vec2 data2 )
+float sdPlane( vec3 p, vec4 data1, vec4 data2 )
 {
     vec3 n = data1.xyz;
     float h = data1.w;
@@ -226,7 +266,7 @@ float sdPlane( vec3 p, vec4 data1, vec2 data2 )
 }
 
 
-float sdHexPrism( vec3 p, vec4 data1, vec2 data2 )
+float sdHexPrism( vec3 p, vec4 data1, vec4 data2 )
 {
     vec2 h = data1.xy;
     const vec3 k = vec3(-0.8660254, 0.5, 0.57735);
@@ -239,7 +279,7 @@ float sdHexPrism( vec3 p, vec4 data1, vec2 data2 )
 }
 
 
-float sdTriPrism( vec3 p, vec4 data1, vec2 data2 )
+float sdTriPrism( vec3 p, vec4 data1, vec4 data2 )
 {
     vec2 h = data1.xy;
     vec3 q = abs(p);
@@ -257,7 +297,7 @@ float sdTriPrism( vec3 p, vec4 data1, vec2 data2 )
 // }
 
 
-float sdVerticalCapsule( vec3 p, vec4 data1, vec2 data2 )
+float sdVerticalCapsule( vec3 p, vec4 data1, vec4 data2 )
 {
     float h = data1.x;
     float r = data1.y;
@@ -266,7 +306,7 @@ float sdVerticalCapsule( vec3 p, vec4 data1, vec2 data2 )
 }
 
 
-float sdCappedCylinder( vec3 p, vec4 data1, vec2 data2 )
+float sdCappedCylinder( vec3 p, vec4 data1, vec4 data2 )
 {
     float h = data1.x;
     float r = data1.y;
@@ -290,7 +330,7 @@ float sdCappedCylinder( vec3 p, vec4 data1, vec2 data2 )
 // }
 
 
-float sdRoundedCylinder( vec3 p, vec4 data1, vec2 data2 )
+float sdRoundedCylinder( vec3 p, vec4 data1, vec4 data2 )
 {
     float ra = data1.x;
     float rb = data1.y;
@@ -300,7 +340,7 @@ float sdRoundedCylinder( vec3 p, vec4 data1, vec2 data2 )
 }
 
 
-float sdCappedCone( vec3 p, vec4 data1, vec2 data2 )
+float sdCappedCone( vec3 p, vec4 data1, vec4 data2 )
 {
     float h = data1.x;
     float r1 = data1.y;
@@ -334,7 +374,7 @@ float sdCappedCone( vec3 p, vec4 data1, vec2 data2 )
 // }
 
 
-float sdSolidAngle(vec3 p, vec4 data1, vec2 data2 )
+float sdSolidAngle(vec3 p, vec4 data1, vec4 data2 )
 {
     vec2 c = data1.xy;
     float ra = data1.z;
@@ -346,7 +386,7 @@ float sdSolidAngle(vec3 p, vec4 data1, vec2 data2 )
 }
 
 
-float sdCutSphere( vec3 p, vec4 data1, vec2 data2 )
+float sdCutSphere( vec3 p, vec4 data1, vec4 data2 )
 {
     float r = data1.x;
     float h = data1.y;
@@ -362,7 +402,7 @@ float sdCutSphere( vec3 p, vec4 data1, vec2 data2 )
 }
 
 
-float sdCutHollowSphere( vec3 p,  vec4 data1, vec2 data2 )
+float sdCutHollowSphere( vec3 p,  vec4 data1, vec4 data2 )
 {
     float r = data1.x;
     float h = data1.y;
@@ -377,7 +417,7 @@ float sdCutHollowSphere( vec3 p,  vec4 data1, vec2 data2 )
 }
 
 
-float sdDeathStar( in vec3 p2, vec4 data1, vec2 data2 )
+float sdDeathStar( in vec3 p2, vec4 data1, vec4 data2 )
 {
     float ra = data1.x;
     float rb = data1.y;
@@ -396,7 +436,7 @@ float sdDeathStar( in vec3 p2, vec4 data1, vec2 data2 )
 }
 
 
-float sdRoundCone( vec3 p, vec4 data1, vec2 data2 )
+float sdRoundCone( vec3 p, vec4 data1, vec4 data2 )
 {
     float r1 = data1.x;
     float r2 = data1.y;
@@ -440,7 +480,7 @@ float sdRoundCone( vec3 p, vec4 data1, vec2 data2 )
 // }
 
 
-float sdEllipsoid( vec3 p,  vec4 data1, vec2 data2 )
+float sdEllipsoid( vec3 p,  vec4 data1, vec4 data2 )
 {
     vec3 r = data1.xyz;
     float k0 = length(p/r);
@@ -450,7 +490,7 @@ float sdEllipsoid( vec3 p,  vec4 data1, vec2 data2 )
 
 
 
-float sdRhombus(vec3 p,  vec4 data1, vec2 data2 )
+float sdRhombus(vec3 p,  vec4 data1, vec4 data2 )
 {
     float la = data1.x;
     float lb = data1.y;
@@ -465,7 +505,7 @@ float sdRhombus(vec3 p,  vec4 data1, vec2 data2 )
 
 
 
-float sdOctahedron( vec3 p,   vec4 data1, vec2 data2 )
+float sdOctahedron( vec3 p,   vec4 data1, vec4 data2 )
 {
     float s = data1.x;
     p = abs(p);
@@ -473,7 +513,7 @@ float sdOctahedron( vec3 p,   vec4 data1, vec2 data2 )
 }
 
 
-float sdPyramid( vec3 p, vec4 data1, vec2 data2 )
+float sdPyramid( vec3 p, vec4 data1, vec4 data2 )
 {
     float h = data1.x;
     float m2 = h*h + 0.25;
@@ -541,82 +581,106 @@ float sdPyramid( vec3 p, vec4 data1, vec2 data2 )
 // }
 
 //Shapes
-float sdBox( vec3 p, vec4 data1, vec2 data2 )
+float sdBox( vec3 p, vec4 data1, vec4 data2 )
 {
   vec3 d = abs(p) - data1.xyz;
   return min(max(d.x,max(d.y,d.z)),0.0) +
          length(max(d,0.0));
 }
 
-float sdSphere( vec3 p, vec4 data1, vec2 data2 )
+float sdSphere( vec3 p, vec4 data1, vec4 data2 )
 {
   return length(p)-data1.x;
 }
 
-float sdRoundBox( vec3 p, vec4 data1, vec2 data2 )
+float sdRoundBox( vec3 p, vec4 data1, vec4 data2 )
 {
   vec3 q = abs(p) - data1.xyz;
   return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) - data1.w;
 }
 
 
-// vec4 w = opElongate( transformedPos, vec3(0.2,0.0,1.0) );\
-// transformedPos = w.xyz;\
-// float addend=w.w;\
-
 #define RAYMARCH_PRIM(pos, groupInx, primInx, res, sdFunc) \
 { \
     mat4 groupTransform = RenderGroups[groupInx].transform; \
-    int groupOpType = RenderGroups[groupInx].renderOpType; \
+    int primOpType = Primitives[primInx].opType; \
     Material primMat = Materials[Primitives[primInx].matID]; \
-    vec3 transformedPos = (groupTransform * Primitives[primInx].transform * vec4(pos,1)).xyz; \
     \
-    float addend=0; \
+    vec3 posTmp = pos;\
+    if(Primitives[primInx].symmetry==1) posTmp.x = abs(posTmp.x);\
+    if(Primitives[primInx].symmetry==2) posTmp.z = abs(posTmp.z);\
+    if(Primitives[primInx].symmetry==3) posTmp.y = abs(posTmp.y);\
+    if(Primitives[primInx].symmetry==4) posTmp.xz = abs(posTmp.xz);\
+    if(Primitives[primInx].symmetry==5) posTmp.xy = abs(posTmp.xy);\
+    if(Primitives[primInx].symmetry==6) posTmp.yz = abs(posTmp.yz);\
+    if(Primitives[primInx].symmetry==7) posTmp = abs(posTmp);\
     \
-    if(groupOpType == SIMPLE_RENDER_OPTYPE) \
+    vec3 transformedPos = (groupTransform * Primitives[primInx].transform * vec4(posTmp,1)).xyz; \
+    if(Primitives[primInx].repetitionData.w==1) transformedPos = opRepLim( transformedPos,Primitives[primInx].repetitionBounds.w, Primitives[primInx].repetitionBounds.xyz);\
+    if(Primitives[primInx].repetitionData.w==2) transformedPos = opRep( transformedPos, Primitives[primInx].repetitionData.xyz);\
+    \
+    vec4 w = opElongate( transformedPos, Primitives[primInx].elongation );\
+    transformedPos = w.xyz;\
+    float addend=w.w;\
+    float roundingFactor = Primitives[primInx].rounding;\
+    \
+    if(primOpType == SIMPLE_RENDER_OPTYPE) \
     { \
         res = opU( \
-            Hit(addend+sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2), primMat.color),  \
+            Hit(addend+rounding(\
+                sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2), \
+                roundingFactor),\
+                primMat.color),  \
             res); \
     } \
-    else if(groupOpType == SMOOTH_RENDER_OPTYPE) \
+    else if(primOpType == SMOOTH_RENDER_OPTYPE) \
     { \
         vec2 smoothOp= opSmoothUnion ( \
-            addend + sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2),  \
+            addend + rounding(\
+                sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2), \
+                roundingFactor),  \
             res.distance,  \
             1); \
         res.distance = smoothOp.x; \
         res.color =  mix(primMat.color, res.color, smoothOp.y); \
     } \
-    else if(groupOpType == SUBTRACT_RENDER_OPTYPE) \
+    else if(primOpType == SUBTRACT_RENDER_OPTYPE) \
     { \
         float subtractOp = opSubtract ( \
-            addend + sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2),  \
+            addend + rounding(\
+                sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2), \
+                roundingFactor),  \
             res.distance); \
         res.distance = subtractOp; \
         res.color =  primMat.color; \
     } \
-    else if(groupOpType == SMOOTH_SUBTRACT_RENDER_OPTYPE) \
+    else if(primOpType == SMOOTH_SUBTRACT_RENDER_OPTYPE) \
     { \
         float subtractOp = opSmoothSubtraction ( \
-            addend + sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2),  \
+            addend + rounding(\
+                sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2), \
+                roundingFactor),  \
             res.distance, \
             1); \
         res.distance = subtractOp; \
         res.color =  primMat.color; \
     } \
-    else if(groupOpType == INTERSECT_RENDER_OPTYPE) \
+    else if(primOpType == INTERSECT_RENDER_OPTYPE) \
     { \
         float intersectOp = opIntersection ( \
-            addend + sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2),  \
+            addend + rounding(\
+                sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2), \
+                roundingFactor),  \
             res.distance); \
         res.distance = intersectOp; \
         res.color =  primMat.color; \
     } \
-    else if(groupOpType == SMOOTH_INTERSECT_RENDER_OPTYPE) \
+    else if(primOpType == SMOOTH_INTERSECT_RENDER_OPTYPE) \
     { \
         float intersectOp = opSmoothIntersection ( \
-            addend + sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2),  \
+            addend + rounding(\
+                sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2), \
+                roundingFactor),  \
             res.distance, \
             1); \
         res.distance = intersectOp; \
@@ -633,88 +697,83 @@ Hit RayMarch( vec3 pos ){
     for(int i=0; i<numGroups; i++)
     {
         mat4 groupTransform = RenderGroups[i].transform;
-        int groupOpType = RenderGroups[i].renderOpType;
-
+        
         for(int j=0; j<RenderGroups[i].numPrimitives; j++)
         {
             int primInx = RenderGroups[i].primitives[j];
             Material primMat = Materials[Primitives[primInx].matID];
-            if(Primitives[primInx].Type == SPHERE_TYPE)             { 
+            if(Primitives[primInx].type == SPHERE_TYPE)             { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdSphere); 
             }
-            else if(Primitives[primInx].Type == BOX_TYPE) { 
+            else if(Primitives[primInx].type == BOX_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdBox);
             }
-            else if(Primitives[primInx].Type == ROUNDBOX_TYPE) { 
+            else if(Primitives[primInx].type == ROUNDBOX_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdRoundBox);             
             }
-            else if(Primitives[primInx].Type == BOXFRAME_TYPE) { 
+            else if(Primitives[primInx].type == BOXFRAME_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdBoxFrame);
             }
-            else if(Primitives[primInx].Type == TORUS_TYPE) { 
+            else if(Primitives[primInx].type == TORUS_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdTorus);
             }
-            else if(Primitives[primInx].Type == CAPPEDTORRUS_TYPE) { 
+            else if(Primitives[primInx].type == CAPPEDTORRUS_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdCappedTorus);
             }
-            else if(Primitives[primInx].Type == LINK_TYPE) { 
+            else if(Primitives[primInx].type == LINK_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdLink);
             }
-            else if(Primitives[primInx].Type == INFINITECYLINDER_TYPE) { 
+            else if(Primitives[primInx].type == INFINITECYLINDER_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdCylinder);
             }
-            else if(Primitives[primInx].Type == CONE_TYPE) { 
+            else if(Primitives[primInx].type == CONE_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdCone);
             }
-            else if(Primitives[primInx].Type == PLANE_TYPE) { 
+            else if(Primitives[primInx].type == PLANE_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdPlane);
             }
-            else if(Primitives[primInx].Type == HEXAPRISM_TYPE) { 
+            else if(Primitives[primInx].type == HEXAPRISM_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdHexPrism);
             }
-            else if(Primitives[primInx].Type == TRIPRISM_TYPE) { 
+            else if(Primitives[primInx].type == TRIPRISM_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdTriPrism);
             }
-            else if(Primitives[primInx].Type == CAPPEDCYLINDER_TYPE) { 
+            else if(Primitives[primInx].type == CAPPEDCYLINDER_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdCappedCylinder);
             }
-            else if(Primitives[primInx].Type == ROUNDCYLINDER_TYPE) { 
+            else if(Primitives[primInx].type == ROUNDCYLINDER_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdRoundedCylinder);
             }
-            else if(Primitives[primInx].Type == CAPPEDCONE_TYPE) { 
+            else if(Primitives[primInx].type == CAPPEDCONE_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdCappedCone);
             }
-            else if(Primitives[primInx].Type == SOLIDANGLE_TYPE) { 
+            else if(Primitives[primInx].type == SOLIDANGLE_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdSolidAngle);
             }
-            else if(Primitives[primInx].Type == CUTSPHERE_TYPE) { 
+            else if(Primitives[primInx].type == CUTSPHERE_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdCutSphere);
             }
-            else if(Primitives[primInx].Type == CUTHOLLOWSPHERE_TYPE) { 
+            else if(Primitives[primInx].type == CUTHOLLOWSPHERE_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdCutHollowSphere);
             }
-            else if(Primitives[primInx].Type == DEATHSTAR_TYPE) { 
+            else if(Primitives[primInx].type == DEATHSTAR_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdDeathStar);
             }
-            else if(Primitives[primInx].Type == ROUNDCONE_TYPE) { 
+            else if(Primitives[primInx].type == ROUNDCONE_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdRoundCone);
             }
-            else if(Primitives[primInx].Type == ELLIPSOID_TYPE) { 
+            else if(Primitives[primInx].type == ELLIPSOID_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdEllipsoid);
             }
-            else if(Primitives[primInx].Type == RHOMBUS_TYPE) { 
+            else if(Primitives[primInx].type == RHOMBUS_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdRhombus);
             }
-            else if(Primitives[primInx].Type == OCTAHEDRON_TYPE) { 
+            else if(Primitives[primInx].type == OCTAHEDRON_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdOctahedron);
             }
-            else if(Primitives[primInx].Type == PYRAMID_TYPE) { 
+            else if(Primitives[primInx].type == PYRAMID_TYPE) { 
                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdPyramid);
             }
-            // else if(Primitives[primInx].Type == INFINITECONE_TYPE) { // RAYMARCH_PRIM(pos, i, primInx,  res,  sdcone);}
-            // else if(Primitives[primInx].Type == CAPSULE_TYPE) { // RAYMARCH_PRIM(pos, i, primInx,  res,  sdCapsule);}
-            // else if(Primitives[primInx].Type == TRIANGLE_TYPE) { // RAYMARCH_PRIM(pos, i, primInx,  res,  udTriangle);                 }
-            // else if(Primitives[primInx].Type == QUAD_TYPE) { // RAYMARCH_PRIM(pos, i, primInx,  res,  udQuad);                 }
         }
     }
     return res;
@@ -755,15 +814,27 @@ Hit calcIntersection( in Ray ray ){
 // Calculates the normal by taking a very small distance,
 // remapping the function, and getting normal for that
 vec3 calcNormal( in vec3 pos ){
-    
-	vec3 eps = vec3( 0.001, 0.0, 0.0 );
-	vec3 nor = vec3(
-	    RayMarch(pos+eps.xyy).distance - RayMarch(pos-eps.xyy).distance,
-	    RayMarch(pos+eps.yxy).distance - RayMarch(pos-eps.yxy).distance,
-	    RayMarch(pos+eps.yyx).distance - RayMarch(pos-eps.yyx).distance );
-	return normalize(nor);
+    const float h = 0.0001; // replace by an appropriate value
+    const vec2 k = vec2(1,-1);
+    return normalize( k.xyy*RayMarch( pos + k.xyy*h ).distance + 
+                      k.yyx*RayMarch( pos + k.yyx*h ).distance + 
+                      k.yxy*RayMarch( pos + k.yxy*h ).distance + 
+                      k.xxx*RayMarch( pos + k.xxx*h ).distance );
 }
 
+float shadow( in vec3 ro, in vec3 rd, float mint, float maxt, float k )
+{
+    float res = 1.0;
+    for( float t=mint; t<maxt; )
+    {
+        float h = RayMarch(ro + rd*t).distance;
+        if( h<0.001 )
+            return 0.0;
+        res = min( res, k*h/t );
+        t += h;
+    }
+    return res;
+}
 
 
 
@@ -788,10 +859,12 @@ vec3 render( Hit res , Ray ray ){
     vec4 tex = vec4(1,1,1,1);
     vec3 specular =  vec3(tex) * pow(max(dot(norm.xyz, halfwayVec),0.0), 1.0);
 	
+    float sh = shadow( pos, lightDir, 0.01, 10, 32);
     
     vec3 matColor = res.color;
 
-    color = matColor * diffuse + specular;
+    // color = matColor * diffuse + specular;
+    color = matColor * diffuse * sh;
   }
    
   return color;
@@ -803,22 +876,10 @@ void main()
 {
     vec2 d = (2.0 * fragUv - 1.0);
     
-    // float scale = tan(camFov * 0.5);
-    // d.y *= resolution.y / resolution.x * scale;
-    // d.x *= scale;
-    // vec3 rayDir = normalize(d.x * camRight + d.y * camUp - camForward);
-
-
     float imageAspectRatio = resolution.x / resolution.y; // assuming width > height 
     float camLength = 1.0 / tan(camFov / 2); 
     vec4 rayDir = normalize(vec4(d.x * imageAspectRatio, d.y, -camLength, 0));
     rayDir = (cameraMatrix * rayDir);    
-
-    // float Px = (2 * ((fragUv.x + 0.5) / resolution.x) - 1) * tan(camFov / 2) * imageAspectRatio; 
-    // float Py = (1 - 2 * ((fragUv.y + 0.5) / resolution.y) * tan(camFov / 2)); 
-    // vec3 rayDir = normalize(Px * camRight + Py * camUp - camForward);
-    // rayDir = normalize(rayDir); // it's a direction so don't forget to normalize 
-    
 
     Ray ray = Ray(camPosition, rayDir.xyz);
     Hit res = calcIntersection(ray);    
