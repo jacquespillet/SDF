@@ -32,11 +32,41 @@ struct Material
     float padding;
 };
 
-#define SphereType 0
-#define BoxType 1
+#define SPHERE_TYPE 0
+#define BOX_TYPE 1
+#define ROUNDBOX_TYPE 2
+#define BOXFRAME_TYPE 3
+#define TORUS_TYPE 4
+#define CAPPEDTORRUS_TYPE 5
+#define LINK_TYPE 6
+#define INFINITECYLINDER_TYPE 7
+#define CONE_TYPE 8
+#define INFINITECONE_TYPE 9
+#define PLANE_TYPE 10
+#define HEXAPRISM_TYPE 11
+#define TRIPRISM_TYPE 12
+#define CAPSULE_TYPE 13
+#define CAPPEDCYLINDER_TYPE 14
+#define ROUNDCYLINDER_TYPE 15
+#define CAPPEDCONE_TYPE 16
+#define SOLIDANGLE_TYPE 17
+#define CUTSPHERE_TYPE 18
+#define CUTHOLLOWSPHERE_TYPE 19
+#define DEATHSTAR_TYPE 20
+#define ROUNDCONE_TYPE 21
+#define ELLIPSOID_TYPE 22
+#define RHOMBUS_TYPE 23
+#define OCTAHEDRON_TYPE 24
+#define PYRAMID_TYPE 25
+#define TRIANGLE_TYPE 26
+#define QUAD_TYPE 27
 
 #define SIMPLE_RENDER_OPTYPE 0
 #define SMOOTH_RENDER_OPTYPE 1
+#define SUBTRACT_RENDER_OPTYPE 2
+#define SMOOTH_SUBTRACT_RENDER_OPTYPE 3
+#define INTERSECT_RENDER_OPTYPE 4
+#define SMOOTH_INTERSECT_RENDER_OPTYPE 5
 
 struct Primitive
 {
@@ -73,15 +103,15 @@ layout (std430, binding = 3) buffer renderGroupsBuffer {
 };
 
 
-// checks to see which intersection is closer
+
+float dot2( in vec2 v ) { return dot(v,v); }
+float dot2( in vec3 v ) { return dot(v,v); }
+float ndot( in vec2 a, in vec2 b ) { return a.x*b.x - a.y*b.y; }
+
+//Group operations
+
 Hit opU( Hit d1, Hit d2 ){
 	return (d1.distance<d2.distance) ? d1 : d2;
-}
-
-//Operations
-float opTest( float d1, float d2, float k ){
-    float h = clamp( 0.5 + 0.5*(d2-d1)/k, 0.0, 1.0 );
-    return mix( d2, d1, h ) - k*h*(1.0-h); 
 }
 
 vec2 opSmoothUnion( float a, float b, float k )
@@ -92,27 +122,506 @@ vec2 opSmoothUnion( float a, float b, float k )
     return (a<b) ? vec2(a-s,m) : vec2(b-s,1.0-m);    
 }
 
-//Shapes
-float sdBox( vec3 p, vec3 b )
+float opSubtract( float d1, float d2 ){
+    return max(d1,-d2);
+}
+
+
+float opSmoothSubtraction( float d1, float d2, float k ) {
+    d1 *=-1;
+    d2 *=-1;
+    float h = clamp( 0.5 - 0.5*(d2+d1)/k, 0.0, 1.0 );
+    return mix( d2, -d1, h ) + k*h*(1.0-h);
+}
+
+float opIntersection( float d1, float d2 ) { 
+    return max(-d1,d2); 
+}
+
+float opSmoothIntersection( float d1, float d2, float k ) {
+    float h = clamp( 0.5 - 0.5*(d2-d1)/k, 0.0, 1.0 );
+    return mix( d2, d1, h ) + k*h*(1.0-h); 
+}
+
+//Primitive operations
+
+vec4 opElongate( in vec3 p, in vec3 h )
+{    
+    vec3 q = abs(p)-h;
+    return vec4( max(q,0.0), min(max(q.x,max(q.y,q.z)),0.0) );
+}
+
+
+//SDFs
+float sdBoxFrame( vec3 p, vec4 data1, vec2 data2 )
 {
-  vec3 d = abs(p) - b;
+    vec3 b = data1.xyz;
+    float e = data1.w;
+        p = abs(p  )-b;
+    vec3 q = abs(p+e)-e;
+    return min(min(
+        length(max(vec3(p.x,q.y,q.z),0.0))+min(max(p.x,max(q.y,q.z)),0.0),
+        length(max(vec3(q.x,p.y,q.z),0.0))+min(max(q.x,max(p.y,q.z)),0.0)),
+        length(max(vec3(q.x,q.y,p.z),0.0))+min(max(q.x,max(q.y,p.z)),0.0));
+}
+
+float sdTorus( vec3 p,  vec4 data1, vec2 data2 )
+{
+    vec2 t = data1.xy;
+    vec2 q = vec2(length(p.xz)-t.x,p.y);
+    return length(q)-t.y;
+}
+
+float sdCappedTorus(in vec3 p,  vec4 data1, vec2 data2 )
+{
+    vec2 sc = data1.xy;
+    float ra = data1.z;
+    float rb = data1.w;
+    p.x = abs(p.x);
+    float k = (sc.y*p.x>sc.x*p.y) ? dot(p.xy,sc) : length(p.xy);
+    return sqrt( dot(p,p) + ra*ra - 2.0*ra*k ) - rb;
+}
+
+
+float sdLink( vec3 p,  vec4 data1, vec2 data2 )
+{
+    float le = data1.x;
+    float r1 = data1.y;
+    float r2 = data1.z;
+    vec3 q = vec3( p.x, max(abs(p.y)-le,0.0), p.z );
+    return length(vec2(length(q.xy)-r1,q.z)) - r2;
+}
+
+
+float sdCylinder( vec3 p, vec4 data1, vec2 data2 )
+{
+    vec3 c = data1.xyz;
+    return length(p.xz-c.xy)-c.z;
+}
+
+
+float sdCone( vec3 p, vec4 data1, vec2 data2 )
+{
+    vec2 c = data1.xy;
+    float h = data1.z;
+    
+    vec2 q = h*vec2(c.x/c.y,-1.0);
+        
+    vec2 w = vec2( length(p.xz), p.y );
+    vec2 a = w - q*clamp( dot(w,q)/dot(q,q), 0.0, 1.0 );
+    vec2 b = w - q*vec2( clamp( w.x/q.x, 0.0, 1.0 ), 1.0 );
+    float k = sign( q.y );
+    float d = min(dot( a, a ),dot(b, b));
+    float s = max( k*(w.x*q.y-w.y*q.x),k*(w.y-q.y)  );
+    return sqrt(d)*sign(s);    
+}
+
+
+float sdPlane( vec3 p, vec4 data1, vec2 data2 )
+{
+    vec3 n = data1.xyz;
+    float h = data1.w;
+    // n must be normalized
+    return dot(p,n) + h;
+}
+
+
+float sdHexPrism( vec3 p, vec4 data1, vec2 data2 )
+{
+    vec2 h = data1.xy;
+    const vec3 k = vec3(-0.8660254, 0.5, 0.57735);
+    p = abs(p);
+    p.xy -= 2.0*min(dot(k.xy, p.xy), 0.0)*k.xy;
+    vec2 d = vec2(
+        length(p.xy-vec2(clamp(p.x,-k.z*h.x,k.z*h.x), h.x))*sign(p.y-h.x),
+        p.z-h.y );
+    return min(max(d.x,d.y),0.0) + length(max(d,0.0));
+}
+
+
+float sdTriPrism( vec3 p, vec4 data1, vec2 data2 )
+{
+    vec2 h = data1.xy;
+    vec3 q = abs(p);
+    return max(q.z-h.y,max(q.x*0.866025+p.y*0.5,-p.y)-h.x*0.5);
+}
+
+//MISSING PARAMS
+// float sdCapsule( vec3 p, vec3 a, vec3 b, float r )
+// {
+//     vec3 a = data1.xyz;
+//     vec3 b = vec3(data1.w, data2.x, data2.y);
+//   vec3 pa = p - a, ba = b - a;
+//   float h = clamp( dot(pa,ba)/dot(ba,ba), 0.0, 1.0 );
+//   return length( pa - ba*h ) - r;
+// }
+
+
+float sdVerticalCapsule( vec3 p, vec4 data1, vec2 data2 )
+{
+    float h = data1.x;
+    float r = data1.y;
+    p.y -= clamp( p.y, 0.0, h );
+    return length( p ) - r;
+}
+
+
+float sdCappedCylinder( vec3 p, vec4 data1, vec2 data2 )
+{
+    float h = data1.x;
+    float r = data1.y;
+    vec2 d = abs(vec2(length(p.xz),p.y)) - vec2(h,r);
+    return min(max(d.x,d.y),0.0) + length(max(d,0.0));
+}
+
+//MISSING PARAMS
+// float sdCappedCylinder(vec3 p, vec3 a, vec3 b, float r)
+// {
+//   vec3  ba = b - a;
+//   vec3  pa = p - a;
+//   float baba = dot(ba,ba);
+//   float paba = dot(pa,ba);
+//   float x = length(pa*baba-ba*paba) - r*baba;
+//   float y = abs(paba-baba*0.5)-baba*0.5;
+//   float x2 = x*x;
+//   float y2 = y*y*baba;
+//   float d = (max(x,y)<0.0)?-min(x2,y2):(((x>0.0)?x2:0.0)+((y>0.0)?y2:0.0));
+//   return sign(d)*sqrt(abs(d))/baba;
+// }
+
+
+float sdRoundedCylinder( vec3 p, vec4 data1, vec2 data2 )
+{
+    float ra = data1.x;
+    float rb = data1.y;
+    float h = data1.z;
+    vec2 d = vec2( length(p.xz)-2.0*ra+rb, abs(p.y) - h );
+    return min(max(d.x,d.y),0.0) + length(max(d,0.0)) - rb;
+}
+
+
+float sdCappedCone( vec3 p, vec4 data1, vec2 data2 )
+{
+    float h = data1.x;
+    float r1 = data1.y;
+    float r2 = data1.z;
+    vec2 q = vec2( length(p.xz), p.y );
+    vec2 k1 = vec2(r2,h);
+    vec2 k2 = vec2(r2-r1,2.0*h);
+    vec2 ca = vec2(q.x-min(q.x,(q.y<0.0)?r1:r2), abs(q.y)-h);
+    vec2 cb = q - k1 + k2*clamp( dot(k1-q,k2)/dot2(k2), 0.0, 1.0 );
+    float s = (cb.x<0.0 && ca.y<0.0) ? -1.0 : 1.0;
+    return s*sqrt( min(dot2(ca),dot2(cb)) );
+}
+
+//MISSING PARAMS
+// float sdCappedCone(vec3 p, vec3 a, vec3 b, float ra, float rb)
+// {
+//   float rba  = rb-ra;
+//   float baba = dot(b-a,b-a);
+//   float papa = dot(p-a,p-a);
+//   float paba = dot(p-a,b-a)/baba;
+//   float x = sqrt( papa - paba*paba*baba );
+//   float cax = max(0.0,x-((paba<0.5)?ra:rb));
+//   float cay = abs(paba-0.5)-0.5;
+//   float k = rba*rba + baba;
+//   float f = clamp( (rba*(x-ra)+paba*baba)/k, 0.0, 1.0 );
+//   float cbx = x-ra - f*rba;
+//   float cby = paba - f;
+//   float s = (cbx<0.0 && cay<0.0) ? -1.0 : 1.0;
+//   return s*sqrt( min(cax*cax + cay*cay*baba,
+//                      cbx*cbx + cby*cby*baba) );
+// }
+
+
+float sdSolidAngle(vec3 p, vec4 data1, vec2 data2 )
+{
+    vec2 c = data1.xy;
+    float ra = data1.z;
+    // c is the sin/cos of the angle
+    vec2 q = vec2( length(p.xz), p.y );
+    float l = length(q) - ra;
+    float m = length(q - c*clamp(dot(q,c),0.0,ra) );
+    return max(l,m*sign(c.y*q.x-c.x*q.y));
+}
+
+
+float sdCutSphere( vec3 p, vec4 data1, vec2 data2 )
+{
+    float r = data1.x;
+    float h = data1.y;
+    // sampling independent computations (only depend on shape)
+    float w = sqrt(r*r-h*h);
+
+    // sampling dependant computations
+    vec2 q = vec2( length(p.xz), p.y );
+    float s = max( (h-r)*q.x*q.x+w*w*(h+r-2.0*q.y), h*q.x-w*q.y );
+    return (s<0.0) ? length(q)-r :
+            (q.x<w) ? h - q.y     :
+                    length(q-vec2(w,h));
+}
+
+
+float sdCutHollowSphere( vec3 p,  vec4 data1, vec2 data2 )
+{
+    float r = data1.x;
+    float h = data1.y;
+    float t = data1.z;
+    // sampling independent computations (only depend on shape)
+    float w = sqrt(r*r-h*h);
+
+    // sampling dependant computations
+    vec2 q = vec2( length(p.xz), p.y );
+    return ((h*q.x<w*q.y) ? length(q-vec2(w,h)) : 
+                            abs(length(q)-r) ) - t;
+}
+
+
+float sdDeathStar( in vec3 p2, vec4 data1, vec2 data2 )
+{
+    float ra = data1.x;
+    float rb = data1.y;
+    float d = data1.z;
+    // sampling independent computations (only depend on shape)
+    float a = (ra*ra - rb*rb + d*d)/(2.0*d);
+    float b = sqrt(max(ra*ra-a*a,0.0));
+
+    // sampling dependant computations
+    vec2 p = vec2( p2.x, length(p2.yz) );
+    if( p.x*b-p.y*a > d*max(b-p.y,0.0) )
+    return length(p-vec2(a,b));
+    else
+    return max( (length(p          )-ra),
+                -(length(p-vec2(d,0))-rb));
+}
+
+
+float sdRoundCone( vec3 p, vec4 data1, vec2 data2 )
+{
+    float r1 = data1.x;
+    float r2 = data1.y;
+    float h = data1.z;
+    // sampling independent computations (only depend on shape)
+    float b = (r1-r2)/h;
+    float a = sqrt(1.0-b*b);
+
+    // sampling dependant computations
+    vec2 q = vec2( length(p.xz), p.y );
+    float k = dot(q,vec2(-b,a));
+    if( k<0.0 ) return length(q) - r1;
+    if( k>a*h ) return length(q-vec2(0.0,h)) - r2;
+    return dot(q, vec2(a,b) ) - r1;
+}
+
+
+//MISSOING
+// float sdRoundCone(vec3 p, vec3 a, vec3 b, float r1, float r2)
+// {
+//   // sampling independent computations (only depend on shape)
+//   vec3  ba = b - a;
+//   float l2 = dot(ba,ba);
+//   float rr = r1 - r2;
+//   float a2 = l2 - rr*rr;
+//   float il2 = 1.0/l2;
+    
+//   // sampling dependant computations
+//   vec3 pa = p - a;
+//   float y = dot(pa,ba);
+//   float z = y - l2;
+//   float x2 = dot2( pa*l2 - ba*y );
+//   float y2 = y*y*l2;
+//   float z2 = z*z*l2;
+
+//   // single square root!
+//   float k = sign(rr)*rr*rr*x2;
+//   if( sign(z)*a2*z2>k ) return  sqrt(x2 + z2)        *il2 - r2;
+//   if( sign(y)*a2*y2<k ) return  sqrt(x2 + y2)        *il2 - r1;
+//                         return (sqrt(x2*a2*il2)+y*rr)*il2 - r1;
+// }
+
+
+float sdEllipsoid( vec3 p,  vec4 data1, vec2 data2 )
+{
+    vec3 r = data1.xyz;
+    float k0 = length(p/r);
+    float k1 = length(p/(r*r));
+    return k0*(k0-1.0)/k1;
+}
+
+
+
+float sdRhombus(vec3 p,  vec4 data1, vec2 data2 )
+{
+    float la = data1.x;
+    float lb = data1.y;
+    float h = data1.z;
+    float ra = data1.w;
+    p = abs(p);
+    vec2 b = vec2(la,lb);
+    float f = clamp( (ndot(b,b-2.0*p.xz))/dot(b,b), -1.0, 1.0 );
+    vec2 q = vec2(length(p.xz-0.5*b*vec2(1.0-f,1.0+f))*sign(p.x*b.y+p.z*b.x-b.x*b.y)-ra, p.y-h);
+    return min(max(q.x,q.y),0.0) + length(max(q,0.0));
+}
+
+
+
+float sdOctahedron( vec3 p,   vec4 data1, vec2 data2 )
+{
+    float s = data1.x;
+    p = abs(p);
+    return (p.x+p.y+p.z-s)*0.57735027;
+}
+
+
+float sdPyramid( vec3 p, vec4 data1, vec2 data2 )
+{
+    float h = data1.x;
+    float m2 = h*h + 0.25;
+
+    p.xz = abs(p.xz);
+    p.xz = (p.z>p.x) ? p.zx : p.xz;
+    p.xz -= 0.5;
+
+    vec3 q = vec3( p.z, h*p.y - 0.5*p.x, h*p.x + 0.5*p.y);
+
+    float s = max(-q.x,0.0);
+    float t = clamp( (q.y-0.5*p.z)/(m2+0.25), 0.0, 1.0 );
+
+    float a = m2*(q.x+s)*(q.x+s) + q.y*q.y;
+    float b = m2*(q.x+0.5*t)*(q.x+0.5*t) + (q.y-m2*t)*(q.y-m2*t);
+
+    float d2 = min(q.y,-q.x*m2-q.y*0.5) > 0.0 ? 0.0 : min(a,b);
+
+    return sqrt( (d2+q.z*q.z)/m2 ) * sign(max(q.z,-p.y));
+}
+
+
+// float udTriangle( vec3 p, vec3 a, vec3 b, vec3 c )
+// {
+//   vec3 ba = b - a; vec3 pa = p - a;
+//   vec3 cb = c - b; vec3 pb = p - b;
+//   vec3 ac = a - c; vec3 pc = p - c;
+//   vec3 nor = cross( ba, ac );
+
+//   return sqrt(
+//     (sign(dot(cross(ba,nor),pa)) +
+//      sign(dot(cross(cb,nor),pb)) +
+//      sign(dot(cross(ac,nor),pc))<2.0)
+//      ?
+//      min( min(
+//      dot2(ba*clamp(dot(ba,pa)/dot2(ba),0.0,1.0)-pa),
+//      dot2(cb*clamp(dot(cb,pb)/dot2(cb),0.0,1.0)-pb) ),
+//      dot2(ac*clamp(dot(ac,pc)/dot2(ac),0.0,1.0)-pc) )
+//      :
+//      dot(nor,pa)*dot(nor,pa)/dot2(nor) );
+// }
+
+
+// float udQuad( vec3 p, vec3 a, vec3 b, vec3 c, vec3 d )
+// {
+//   vec3 ba = b - a; vec3 pa = p - a;
+//   vec3 cb = c - b; vec3 pb = p - b;
+//   vec3 dc = d - c; vec3 pc = p - c;
+//   vec3 ad = a - d; vec3 pd = p - d;
+//   vec3 nor = cross( ba, ad );
+
+//   return sqrt(
+//     (sign(dot(cross(ba,nor),pa)) +
+//      sign(dot(cross(cb,nor),pb)) +
+//      sign(dot(cross(dc,nor),pc)) +
+//      sign(dot(cross(ad,nor),pd))<3.0)
+//      ?
+//      min( min( min(
+//      dot2(ba*clamp(dot(ba,pa)/dot2(ba),0.0,1.0)-pa),
+//      dot2(cb*clamp(dot(cb,pb)/dot2(cb),0.0,1.0)-pb) ),
+//      dot2(dc*clamp(dot(dc,pc)/dot2(dc),0.0,1.0)-pc) ),
+//      dot2(ad*clamp(dot(ad,pd)/dot2(ad),0.0,1.0)-pd) )
+//      :
+//      dot(nor,pa)*dot(nor,pa)/dot2(nor) );
+// }
+
+//Shapes
+float sdBox( vec3 p, vec4 data1, vec2 data2 )
+{
+  vec3 d = abs(p) - data1.xyz;
   return min(max(d.x,max(d.y,d.z)),0.0) +
          length(max(d,0.0));
 }
 
-float sdSphere( vec3 p, float s )
+float sdSphere( vec3 p, vec4 data1, vec2 data2 )
 {
-  return length(p)-s;
+  return length(p)-data1.x;
 }
 
-float sdRoundBox( vec3 p, vec3 b, float r )
+float sdRoundBox( vec3 p, vec4 data1, vec2 data2 )
 {
-  vec3 q = abs(p) - b;
-  return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) - r;
+  vec3 q = abs(p) - data1.xyz;
+  return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) - data1.w;
 }
 
 
-
+// vec4 w = opElongate( transformedPos, vec3(0.2,0.0,1.0) );\
+// transformedPos = w.xyz;\
+// float addend=w.w;\
+#define RAYMARCH_PRIM(pos, groupInx, primInx, res, sdFunc) \
+{ \
+    mat4 groupTransform = RenderGroups[groupInx].transform; \
+    int groupOpType = RenderGroups[groupInx].renderOpType; \
+    Material primMat = Materials[Primitives[primInx].matID]; \
+    vec3 transformedPos = (groupTransform * Primitives[primInx].transform * vec4(pos,1)).xyz; \
+    \
+    float addend=0; \
+    \
+    if(groupOpType == SIMPLE_RENDER_OPTYPE) \
+    { \
+        res = opU( \
+            Hit(addend+sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2), primMat.color),  \
+            res); \
+    } \
+    else if(groupOpType == SMOOTH_RENDER_OPTYPE) \
+    { \
+        vec2 smoothOp= opSmoothUnion ( \
+            addend + sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2),  \
+            res.distance,  \
+            1); \
+        res.distance = smoothOp.x; \
+        res.color =  mix(primMat.color, res.color, smoothOp.y); \
+    } \
+    else if(groupOpType == SUBTRACT_RENDER_OPTYPE) \
+    { \
+        float subtractOp = opSubtract ( \
+            addend + sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2),  \
+            res.distance); \
+        res.distance = subtractOp; \
+        res.color =  primMat.color; \
+    } \
+    else if(groupOpType == SMOOTH_SUBTRACT_RENDER_OPTYPE) \
+    { \
+        float subtractOp = opSmoothSubtraction ( \
+            addend + sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2),  \
+            res.distance, \
+            1); \
+        res.distance = subtractOp; \
+        res.color =  primMat.color; \
+    } \
+    else if(groupOpType == INTERSECT_RENDER_OPTYPE) \
+    { \
+        float intersectOp = opIntersection ( \
+            addend + sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2),  \
+            res.distance); \
+        res.distance = intersectOp; \
+        res.color =  primMat.color; \
+    } \
+    else if(groupOpType == SMOOTH_INTERSECT_RENDER_OPTYPE) \
+    { \
+        float intersectOp = opSmoothIntersection ( \
+            addend + sdFunc( transformedPos, Primitives[primInx].Data1, Primitives[primInx].Data2),  \
+            res.distance, \
+            1); \
+        res.distance = intersectOp; \
+        res.color =  primMat.color; \
+    } \
+} \
 
 //--------------------------------
 // Modelling 
@@ -122,51 +631,41 @@ Hit RayMarch( vec3 pos ){
     
     for(int i=0; i<numGroups; i++)
     {
+        mat4 groupTransform = RenderGroups[i].transform;
         int groupOpType = RenderGroups[i].renderOpType;
 
         for(int j=0; j<RenderGroups[i].numPrimitives; j++)
         {
             int primInx = RenderGroups[i].primitives[j];
             Material primMat = Materials[Primitives[primInx].matID];
-            if(Primitives[primInx].Type == SphereType)
-            {
-                vec3 transformedPos = (Primitives[primInx].transform * vec4(pos,1)).xyz;
-                if(groupOpType == SIMPLE_RENDER_OPTYPE)
-                {
-                    res = opU(
-                        Hit(sdSphere( transformedPos, Primitives[primInx].Data1.x), primMat.color), 
-                        res);
-                }
-                else if(groupOpType == SMOOTH_RENDER_OPTYPE)
-                {
-                    vec2 smoothOp= opSmoothUnion (
-                        sdSphere( transformedPos, Primitives[primInx].Data1.x), 
-                        res.distance, 
-                        1);
-                    res.distance = smoothOp.x;
-                    res.color =  mix(primMat.color, res.color, smoothOp.y);
-                }
-            }
-            else if(Primitives[primInx].Type == BoxType)
-            {
-                vec3 transformedPos = (Primitives[primInx].transform * vec4(pos,1)).xyz;
-
-                if(groupOpType == SIMPLE_RENDER_OPTYPE)
-                {
-                    res = opU(
-                        Hit(sdBox( transformedPos, Primitives[primInx].Data1.xyz),  primMat.color), 
-                        res);
-                }
-                else if(groupOpType == SMOOTH_RENDER_OPTYPE)
-                {
-                    vec2 smoothOp= opSmoothUnion (
-                        sdBox( transformedPos, Primitives[primInx].Data1.xyz), 
-                        res.distance, 
-                        1);
-                    res.distance = smoothOp.x;
-                    res.color =  mix(primMat.color, res.color, smoothOp.y);
-                }                    
-            }
+            if(Primitives[primInx].Type == SPHERE_TYPE)             {                 RAYMARCH_PRIM(pos, i, primInx,  res,  sdSphere); }
+            else if(Primitives[primInx].Type == BOX_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdBox);}
+            else if(Primitives[primInx].Type == ROUNDBOX_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdRoundBox);             }
+            else if(Primitives[primInx].Type == BOXFRAME_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdBoxFrame);}
+            else if(Primitives[primInx].Type == TORUS_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdTorus);}
+            else if(Primitives[primInx].Type == CAPPEDTORRUS_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdCappedTorus);}
+            else if(Primitives[primInx].Type == LINK_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdLink);}
+            else if(Primitives[primInx].Type == INFINITECYLINDER_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdCylinder);}
+            else if(Primitives[primInx].Type == CONE_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdCone);}
+            // else if(Primitives[primInx].Type == INFINITECONE_TYPE) { // RAYMARCH_PRIM(pos, i, primInx,  res,  sdcone);}
+            else if(Primitives[primInx].Type == PLANE_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdPlane);}
+            else if(Primitives[primInx].Type == HEXAPRISM_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdHexPrism);}
+            else if(Primitives[primInx].Type == TRIPRISM_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdTriPrism);}
+            // else if(Primitives[primInx].Type == CAPSULE_TYPE) { // RAYMARCH_PRIM(pos, i, primInx,  res,  sdCapsule);}
+            else if(Primitives[primInx].Type == CAPPEDCYLINDER_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdCappedCylinder);}
+            else if(Primitives[primInx].Type == ROUNDCYLINDER_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdRoundedCylinder);}
+            else if(Primitives[primInx].Type == CAPPEDCONE_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdCappedCone);}
+            else if(Primitives[primInx].Type == SOLIDANGLE_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdSolidAngle);}
+            else if(Primitives[primInx].Type == CUTSPHERE_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdCutSphere);}
+            else if(Primitives[primInx].Type == CUTHOLLOWSPHERE_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdCutHollowSphere);}
+            else if(Primitives[primInx].Type == DEATHSTAR_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdDeathStar);}
+            else if(Primitives[primInx].Type == ROUNDCONE_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdRoundCone);}
+            else if(Primitives[primInx].Type == ELLIPSOID_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdEllipsoid);}
+            else if(Primitives[primInx].Type == RHOMBUS_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdRhombus);}
+            else if(Primitives[primInx].Type == OCTAHEDRON_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdOctahedron);}
+            else if(Primitives[primInx].Type == PYRAMID_TYPE) { RAYMARCH_PRIM(pos, i, primInx,  res,  sdPyramid);}
+            // else if(Primitives[primInx].Type == TRIANGLE_TYPE) { // RAYMARCH_PRIM(pos, i, primInx,  res,  udTriangle);                 }
+            // else if(Primitives[primInx].Type == QUAD_TYPE) { // RAYMARCH_PRIM(pos, i, primInx,  res,  udQuad);                 }
         }
     }
     return res;
@@ -222,7 +721,7 @@ vec3 calcNormal( in vec3 pos ){
 vec3 render( Hit res , Ray ray ){
 //   vec3 color =texture(iChannel0, ray.direction).rgb;
   vec3 color =vec3(1,1,1);
-  vec3 lightPos = vec3( 5 , 5. , 5. );
+  vec3 lightPos = vec3( 50 , 50. , 50. );
     
     
   if( length(res.color) > 0.0){

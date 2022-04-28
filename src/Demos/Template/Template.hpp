@@ -6,13 +6,20 @@
 #include "GL_Helpers/GL_Mesh.hpp"
 #include "GL_Helpers/GL_Camera.hpp"
 
+
+#include "imgui.h"
+#include "ImGuizmo.h"
 //Render groups
 //
 
 enum RenderOpType
 {
     Classic = 0,
-    Smooth = 0,
+    Smooth = 1,
+    Subtract = 2,
+    SmoothSubtract = 3,
+    Intersect = 4,
+    SmoothIntersect = 5,
 };
 
 struct RenderGroup
@@ -20,33 +27,62 @@ struct RenderGroup
     RenderOpType opType;
     int numPrimitives;
     glm::vec2 padding;
-    glm::mat4 transform;
+    glm::mat4 inverseTransform;
     int primitives[256];
 };
 
 struct Material
 {
     glm::vec3 Color;
-    float padding;
+    float shininess;
 };
 
 //Data :
 //Sphere: (Radius, X, X, X), (X, X)
 //Box: (W, H, D, X), (X, X)
+//RoundBox: (W, H, D, RF), (X, X)
 
 enum PrimitiveType
 {
     Sphere=0,
-    Box=1
+    Box=1,
+    RoundBox=2,
+    BoxFrame=3,
+    Torus=4,
+    CappedTorrus=5,
+    Link=6,
+    InfiniteCylinder=7,
+    Cone=8,
+    InfiniteCone=9,
+    Plane=10,
+    HexaPrism=11,
+    TriPrism=12,
+    Capsule=13,
+    CappedCylinder=14,
+    RoundCylinder=15,
+    CappedCone=16,
+    SolidAngle=17,
+    CutSphere=18,
+    CutHollowSphere=19,
+    DeathStar=20,
+    RoundCone=21,
+    Ellipsoid=22,
+    Rhombus=23,
+    Octahedron=24,
+    Pyramid=25,
+    Triangle=26,
+    Quad=27,
+    Count
 };
+
 
 struct Primitive
 {
     glm::vec4 Data1;
     glm::vec2 Data2;
     int matID;
-    int Type;
-    glm::mat4 transform;
+    PrimitiveType Type;
+    glm::mat4 inverseTransform;
 };
 
 class Template : public Demo {
@@ -65,6 +101,22 @@ public :
     void Scroll(float offset);
 
 private:
+    void AddPrimitiveToGroup(PrimitiveType primType, int group);
+    void AddGroup();
+    void AddPrimContextMenu(std::string groupLabel, int groupIndex);
+    
+    void HandleTransforms();
+    void HandlePrimitiveTransform(int primitiveIndex, int groupIndex);
+    void HandleGroupTransform(int groupIndex);
+    
+    void RenderSceneTree();
+    void RenderProperties();
+
+    void RenderMaterialsTab();
+    void RenderMaterial(int materialInx);
+
+    void RenderTransformParams();
+
     clock_t t;
     float deltaTime;
     float elapsedTime;
@@ -89,4 +141,14 @@ private:
     GLuint primitivesBuffer;
     GLuint renderGroupsBuffer;
     GLuint materialsBuffer;
+
+    std::vector<std::string> matNames;
+
+
+    //Scene tree
+    int selectedGroup = -1;
+    int selectedPrimitiveInGroup = -1;    
+
+    ImGuizmo::OPERATION currentGizmoOperation = (ImGuizmo::TRANSLATE);
+    ImGuizmo::MODE currentGizmoMode = (ImGuizmo::WORLD);    
 };
